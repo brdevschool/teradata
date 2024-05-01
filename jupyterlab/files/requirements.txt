@@ -1,0 +1,17 @@
+jupyterlab-git
+teradataml
+teradatasql
+teradatamodelops
+teradatamlwidgets
+sqlalchemy
+dbt-teradata
+tqdm
+numpy
+pandas
+matplotlib
+watermark
+scikit-learn
+scipy
+nbdime
+runipy
+seaborn

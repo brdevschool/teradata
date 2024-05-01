@@ -1,0 +1,104 @@
+# least version Ubuntu
+FROM brdevschool/python:v3.10
+
+# Set the maintainer label
+LABEL maintainer="br.devschool@gmail.com"
+
+# Create Directory Set the working directory in the container
+RUN mkdir -p /opt/app
+
+# Set parameter
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Define arguments that can be passed when building the image
+ENV JULIA_VERSION=1.10.2
+ENV JUPYTER_VERSION=v3.6.3
+ENV TRDSQL_VERSION=3.4.2
+ENV RVERSION=1.10
+
+
+# Create Directory in image to copy from local system to docker
+RUN mkdir -p /opt/app/workspace/notebooks
+RUN mkdir -p /opt/files
+RUN mkdir -p /opt/julia
+RUN mkdir -p /opt/teradata
+RUN mkdir -p /opt/downloads
+
+# Copy files from local system to directories and unzip
+COPY extensions /opt/downloads
+COPY files  /opt/files
+
+######################################################################################################################################################
+# Update and Install pkg in linux
+######################################################################################################################################################
+
+RUN apt-get update && apt-get install -y r-base  r-base-dev \
+    git nodejs npm unzip wget vim git sudo bzip2 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+######################################################################################################################################################
+# Install jupyterlab, R and Julia Kernel 
+######################################################################################################################################################
+
+# Install JupyterLab and the Git extension
+RUN pip install --no-cache-dir jupyterlab==${JUPYTER_VERSION}
+RUN pip install jupyterlab-drawio
+RUN pip install jupyterlab_templates
+
+# Install R and IRKernel (Kernel from Jupyter to R)
+RUN R -e "install.packages('IRkernel', repos='http://cran.rstudio.com/')" \
+    && R -e "IRkernel::installspec(user = FALSE)"
+
+# Install Julia extension for jupyterlab
+RUN wget -P /opt/downloads https://julialang-s3.julialang.org/bin/linux/x64/${RVERSION}/julia-${JULIA_VERSION}-linux-x86_64.tar.gz &&\
+    tar -xvzf /opt/downloads/julia-${JULIA_VERSION}-linux-x86_64.tar.gz -C /opt/julia && \
+    ln -s /opt/extensions/julia/julia-${JULIA_VERSION}/bin /usr/local/bin/julia
+
+ENV PATH=$PATH:/opt/julia/julia-${JULIA_VERSION}/bin
+
+# Install IJulia
+RUN julia -e 'using Pkg; Pkg.add("IJulia");'
+######################################################################################################################################################
+# Install anaconda
+######################################################################################################################################################
+
+# Download and install Anaconda
+RUN wget https://repo.anaconda.com/archive/Anaconda3-2024.02-1-Linux-x86_64.sh -O ~/anaconda.sh && \
+    /bin/bash ~/anaconda.sh -b -p /opt/conda && \
+    rm ~/anaconda.sh
+
+# Set PATH to include Anaconda bin
+#ENV PATH /opt/conda/bin:$PATH
+ENV PATH=$PATH:/opt/conda/bin
+
+######################################################################################################################################################
+# Installing the Extensions into JupyterLab 
+######################################################################################################################################################
+
+# Unzip flies
+RUN unzip /opt/downloads/teradatasqllinux_3.4.2-d02162024.zip -d /opt/teradata
+RUN mkdir -p /usr/local/share/jupyter/kernels/teradatasql
+RUN cp /opt/teradata/teradatasql/* /usr/local/share/jupyter/kernels/teradatasql
+
+# Set the teradata direcory
+ENV PATH=$PATH:/opt/teradata
+
+# Installing the Extensions
+RUN pip install /opt/teradata/teradata_database_explorer_prebuilt-${TRDSQL_VERSION}.tar.gz
+RUN pip install /opt/teradata/teradata_resultset_renderer_prebuilt-${TRDSQL_VERSION}.tar.gz
+RUN pip install /opt/teradata/teradata_sqlhighlighter_prebuilt-${TRDSQL_VERSION}.tar.gz
+RUN pip install /opt/teradata/teradata_connection_manager_prebuilt-${TRDSQL_VERSION}.tar.gz
+RUN pip install /opt/teradata/teradata_preferences_prebuilt-${TRDSQL_VERSION}.tar.gz
+
+
+######################################################################################################################################################
+# Configuring workspace, port and executing command to upload application
+######################################################################################################################################################
+
+WORKDIR /opt/app
+
+# Expose the port JupyterLab will use
+EXPOSE 8888
+
+# Start JupyterLab
+CMD ["jupyter", "lab", "--ip='0.0.0.0'", "--port=8888", "--no-browser", "--allow-root"]
